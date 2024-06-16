@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ledger - Contract Data</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-image: url('/static/images/neon_streak_edited.jpg');
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            background-position: center;
+            color: #fff; /* Adjust text color for readability */
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .content-container {
+            background: rgba(0, 0, 0, 0.7); /* Add a background for contrast */
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+            flex: 1;
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+        .navbar-custom {
+            background-color: #004080; /* Replace with your color */
+            color: #fff;
+        }
+        .navbar-custom a {
+            color: #fff !important;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+            socket.on('update', function(data) {
+                console.log(data);
+                var tableBody = document.getElementById('ledgerTableBody');
+                tableBody.innerHTML = '';  // Clear existing content
+                data.contracts.forEach(function(contract) {
+                    var row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${contract.contract_id}</td>
+                        <td>${contract.timestamp}</td>
+                        <td>${contract.initiator_id}</td>
+                        <td>${Object.entries(contract.participants).map(([id, pos]) => `${id}: (${pos[0].toFixed(2)}, ${pos[1].toFixed(2)})`).join('<br>')}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom">
+        <a class="navbar-brand" href="#">Nexxus Labs</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">Contracts</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/simulation">Simulation</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/ledger">Ledger</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container mt-4">
+        <div class="content-container">
+            <h1>Ledger - Contract Data</h1>
+            <div class="table-container">
+                <table class="table table-dark table-striped">
+                    <thead>
+                        <tr>
+                            <th>Contract ID</th>
+                            <th>Timestamp</th>
+                            <th>Initiator ID</th>
+                            <th>Participants</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ledgerTableBody">
+                        <!-- Contract data will be inserted here dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

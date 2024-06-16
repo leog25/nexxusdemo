@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-Time Contract Data</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-image: url('/static/images/neon_streak_edited.jpg');
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            background-position: center;
+            color: #fff; /* Adjust text color for readability */
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .content-container {
+            background: rgba(0, 0, 0, 0.7); /* Add a background for contrast */
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+            flex: 1;
+        }
+        .contract-box {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            background-color: #333;
+        }
+        .contract-box h3 {
+            margin-top: 0;
+        }
+        .navbar-custom {
+            background-color: #004080; /* Replace with your color */
+            color: #fff;
+        }
+        .navbar-custom a {
+            color: #fff !important;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+            socket.on('update', function(data) {
+                console.log(data);
+                var container = document.getElementById('contractContainer');
+                container.innerHTML = '';  // Clear existing content
+                data.contracts.forEach(function(contract) {
+                    var col = document.createElement('div');
+                    col.className = 'col-md-4';
+                    var box = document.createElement('div');
+                    box.className = 'contract-box';
+                    box.innerHTML = `
+                        <h3>Contract ID: ${contract.contract_id}</h3>
+                        <p><strong>Timestamp:</strong> ${contract.timestamp}</p>
+                        <p><strong>Initiator ID:</strong> ${contract.initiator_id}</p>
+                        <p><strong>Participants:</strong></p>
+                        <ul>
+                            ${Object.entries(contract.participants).map(([id, pos]) => `<li>${id}: (${pos[0].toFixed(2)}, ${pos[1].toFixed(2)})</li>`).join('')}
+                        </ul>
+                    `;
+                    col.appendChild(box);
+                    container.appendChild(col);
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom">
+        <a class="navbar-brand" href="#">Nexxus Labs</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">Contracts</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/simulation">Simulation</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/ledger">Ledger</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container mt-4">
+        <div class="content-container">
+            <h1>Real-Time Contract Data</h1>
+            <div id="contractContainer" class="row"></div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

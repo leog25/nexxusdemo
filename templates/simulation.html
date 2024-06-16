@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-Time Traffic Simulation</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-image: url('/static/images/neon_streak_edited.jpg');
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            background-position: center;
+            color: #fff; /* Adjust text color for readability */
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .content-container {
+            background: rgba(0, 0, 0, 0.7); /* Add a background for contrast */
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+            flex: 1;
+        }
+        .simulation-container {
+            width: 100%;
+            height: 600px;
+            position: relative;
+            border: 1px solid #ccc;
+            background-color: #333;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .controls {
+            margin-bottom: 10px;
+        }
+        .controls input {
+            width: 50px;
+            margin-right: 10px;
+        }
+        #vehicleInfo {
+            margin-top: 20px;
+        }
+        .contract-box {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px;
+            width: 100%;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            background-color: #333;
+        }
+        .contract-box h3 {
+            margin-top: 0;
+        }
+        .navbar-custom {
+            background-color: #004080; /* Replace with your color */
+            color: #fff;
+        }
+        .navbar-custom a {
+            color: #fff !important;
+        }
+        .scrollable-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+            var canvas = document.getElementById('simulationCanvas');
+            var ctx = canvas.getContext('2d');
+            var bounds = {};
+            var zoomFactor = 1.2;  // Initial zoom factor
+            var offsetX = 0;       // Initial offset X
+            var offsetY = 0;       // Initial offset Y
+
+            var isDragging = false;
+            var lastX, lastY;
+            var selectedVehicleId = null;
+
+            function drawSimulation(data) {
+                bounds = data.bounds;
+                var width = canvas.width;
+                var height = canvas.height;
+                var scaleX = (width / (bounds.max_x - bounds.min_x)) / zoomFactor;
+                var scaleY = (height / (bounds.max_y - bounds.min_y)) / zoomFactor;
+
+                ctx.clearRect(0, 0, width, height);  // Clear the canvas
+
+                // Draw edges
+                ctx.strokeStyle = 'gray';
+                data.edges.forEach(function(edge) {
+                    ctx.beginPath();
+                    edge.shape.forEach(function(point, index) {
+                        var x = (point[0] - bounds.min_x) * scaleX + offsetX;
+                        var y = height - (point[1] - bounds.min_y) * scaleY + offsetY;
+                        if (index === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    });
+                    ctx.stroke();
+                });
+
+                // Draw vehicles
+                data.vehicles.forEach(function(vehicle) {
+                    var x = (vehicle.x - bounds.min_x) * scaleX + offsetX;
+                    var y = height - (vehicle.y - bounds.min_y) * scaleY + offsetY;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = vehicle.id === selectedVehicleId ? 'red' : 'blue';
+                    ctx.fill();
+                    ctx.stroke();
+
+                    if (vehicle.id === selectedVehicleId) {
+                        var vehicleInfoDiv = document.getElementById('vehicleInfo');
+                        vehicleInfoDiv.innerHTML = `
+                            <h3>Selected Vehicle ID: ${vehicle.id}</h3>
+                            <p><strong>Location:</strong> (${vehicle.x.toFixed(2)}, ${vehicle.y.toFixed(2)})</p>
+                            <div id="contractContainer" class="row scrollable-container"></div>
+                        `;
+                        var contractContainer = document.getElementById('contractContainer');
+                        contractContainer.innerHTML = '';  // Clear existing content
+                        data.contracts.forEach(function(contract) {
+                            if (contract.initiator_id === vehicle.id) {
+                                var col = document.createElement('div');
+                                col.className = 'col-md-4';
+                                var box = document.createElement('div');
+                                box.className = 'contract-box';
+                                box.innerHTML = `
+                                    <h3>Contract ID: ${contract.contract_id}</h3>
+                                    <p><strong>Timestamp:</strong> ${contract.timestamp}</p>
+                                    <p><strong>Participants:</strong></p>
+                                    <ul>
+                                        ${Object.entries(contract.participants).map(([id, pos]) => `<li>${id}: (${pos[0].toFixed(2)}, ${pos[1].toFixed(2)})`).join('')}
+                                    </ul>
+                                `;
+                                col.appendChild(box);
+                                contractContainer.appendChild(col);
+                            }
+                        });
+                    }
+                });
+            }
+
+            function getMousePos(canvas, evt) {
+                var rect = canvas.getBoundingClientRect();
+                return {
+                    x: evt.clientX - rect.left,
+                    y: evt.clientY - rect.top
+                };
+            }
+
+            function checkVehicleClicked(data, mouseX, mouseY) {
+                var width = canvas.width;
+                var height = canvas.height;
+                var scaleX = (width / (bounds.max_x - bounds.min_x)) / zoomFactor;
+                var scaleY = (height / (bounds.max_y - bounds.min_y)) / zoomFactor;
+
+                for (let vehicle of data.vehicles) {
+                    var x = (vehicle.x - bounds.min_x) * scaleX + offsetX;
+                    var y = height - (vehicle.y - bounds.min_y) * scaleY + offsetY;
+                    var distance = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
+                    if (distance < 5) {  // Vehicle radius
+                        return vehicle;
+                    }
+                }
+                return null;
+            }
+
+            canvas.addEventListener('mousedown', function(event) {
+                isDragging = true;
+                lastX = event.clientX;
+                lastY = event.clientY;
+            });
+
+            canvas.addEventListener('mousemove', function(event) {
+                if (isDragging) {
+                    var deltaX = event.clientX - lastX;
+                    var deltaY = event.clientY - lastY;
+                    offsetX += deltaX;
+                    offsetY += deltaY;
+                    lastX = event.clientX;
+                    lastY = event.clientY;
+                    drawSimulation(socketData);  // Redraw with updated offsets
+                }
+            });
+
+            canvas.addEventListener('mouseup', function(event) {
+                isDragging = false;
+                var mousePos = getMousePos(canvas, event);
+                var clickedVehicle = checkVehicleClicked(socketData, mousePos.x, mousePos.y);
+                if (clickedVehicle) {
+                    selectedVehicleId = clickedVehicle.id;
+                }
+                drawSimulation(socketData);  // Redraw to update vehicle color and display info
+            });
+
+            canvas.addEventListener('wheel', function(event) {
+                event.preventDefault();
+                var mouseX = event.clientX - canvas.getBoundingClientRect().left;
+                var mouseY = event.clientY - canvas.getBoundingClientRect().top;
+
+                // Calculate the point on the map where the cursor is
+                var mapX = (mouseX - offsetX) / ((canvas.width / (bounds.max_x - bounds.min_x)) / zoomFactor);
+                var mapY = (mouseY - offsetY) / ((canvas.height / (bounds.max_y - bounds.min_y)) / zoomFactor);
+
+                if (event.deltaY < 0) {
+                    zoomFactor /= 1.1;  // Zoom in
+                } else {
+                    zoomFactor *= 1.1;  // Zoom out
+                }
+
+                // Calculate new scale
+                var newScaleX = (canvas.width / (bounds.max_x - bounds.min_x)) / zoomFactor;
+                var newScaleY = (canvas.height / (bounds.max_y - bounds.min_y)) / zoomFactor;
+
+                // Adjust offsets to keep the cursor position fixed relative to the map
+                offsetX = mouseX - mapX * newScaleX;
+                offsetY = mouseY - mapY * newScaleY;
+
+                drawSimulation(socketData);  // Redraw with updated zoom factor and offsets
+            });
+
+            var socketData = null;
+
+            socket.on('update', function(data) {
+                socketData = data;
+                drawSimulation(data);
+            });
+        });
+    </script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom">
+        <a class="navbar-brand" href="#">Nexxus Labs</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">Contracts</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/simulation">Simulation</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/ledger">Ledger</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container mt-4">
+        <div class="content-container">
+            <h1>Real-Time Traffic Simulation</h1>
+            <div class="simulation-container">
+                <canvas id="simulationCanvas" width="1000" height="600"></canvas>
+            </div>
+            <div id="vehicleInfo"></div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
